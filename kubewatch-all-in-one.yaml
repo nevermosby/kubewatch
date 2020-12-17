@@ -1,0 +1,188 @@
+---
+# Source: kubewatch/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubewatch
+  namespace: default
+  labels:
+    app.kubernetes.io/name: kubewatch
+    helm.sh/chart: kubewatch-3.0.2
+    app.kubernetes.io/instance: kubewatch
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: kubewatch/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubewatch-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: kubewatch
+    helm.sh/chart: kubewatch-3.0.2
+    app.kubernetes.io/instance: kubewatch
+    app.kubernetes.io/managed-by: Helm
+data:
+  .kubewatch.yaml: |
+    handler:
+      mattermost:
+        channel: k8s-event
+        enabled: true
+        url: http://10.140.0.10:8065/hooks/8q73kd3cg78xujzxfj4wx5pd3r
+        username: davidli
+    resource:
+      configmap: false
+      daemonset: true
+      deployment: false
+      job: false
+      persistentvolume: false
+      pod: true
+      replicaset: false
+      replicationcontroller: false
+      secret: false
+      services: true
+    namespace: ""
+---
+# Source: kubewatch/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubewatch
+  namespace: default
+  labels:
+    app.kubernetes.io/name: kubewatch
+    helm.sh/chart: kubewatch-3.0.2
+    app.kubernetes.io/instance: kubewatch
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - namespaces
+      - services
+      - deployments
+      - replicationcontrollers
+      - replicasets
+      - daemonsets
+      - persistentvolumes
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - deployments/scale
+      - replicasets
+      - replicasets/scale
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+    resources:
+      - daemonsets
+      - deployments
+      - deployments/scale
+      - replicasets
+      - replicasets/scale
+      - replicationcontrollers/scale
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - batch
+    resources:
+      - cronjobs
+      - jobs
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: kubewatch/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubewatch
+  namespace: default
+  labels:
+    app.kubernetes.io/name: kubewatch
+    helm.sh/chart: kubewatch-3.0.2
+    app.kubernetes.io/instance: kubewatch
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubewatch
+subjects:
+  - kind: ServiceAccount
+    name: kubewatch
+    namespace: default
+---
+# Source: kubewatch/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubewatch
+  labels:
+    app.kubernetes.io/name: kubewatch
+    helm.sh/chart: kubewatch-3.0.2
+    app.kubernetes.io/instance: kubewatch
+    app.kubernetes.io/managed-by: Helm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubewatch
+      app.kubernetes.io/instance: kubewatch
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        checksum/config-map: a4e300b9d39803cacfd31f69e3f71d1c8fb537f2f881d0074beca4cb17a41406
+      labels:
+        app.kubernetes.io/name: kubewatch
+        helm.sh/chart: kubewatch-3.0.2
+        app.kubernetes.io/instance: kubewatch
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: kubewatch
+                    app.kubernetes.io/instance: kubewatch
+                namespaces:
+                  - default
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      restartPolicy: Always
+      serviceAccountName: kubewatch
+      containers:
+        - name: kubewatch
+          image: docker.io/bitnami/kubewatch:0.1.0-debian-10-r133
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits: {}
+            requests: {}
+          volumeMounts:
+            - name: configuration
+              mountPath: /opt/bitnami/kubewatch/.kubewatch.yaml
+              subPath: .kubewatch.yaml
+      volumes:
+        - name: configuration
+          configMap:
+            name: kubewatch-config
